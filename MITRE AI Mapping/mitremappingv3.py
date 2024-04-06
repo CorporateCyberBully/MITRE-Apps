@@ -2,7 +2,7 @@ import subprocess
 import sys
 from datetime import datetime
 
-# Function to install required packages
+# Function to ensure required Python packages are installed
 def install_and_import_packages():
     try:
         global SentenceTransformer, util, attack_client, np
@@ -10,6 +10,7 @@ def install_and_import_packages():
         from attackcti import attack_client
         import numpy as np
     except ImportError:
+        print("Required packages not found. Installing...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "sentence-transformers"])
         subprocess.check_call([sys.executable, "-m", "pip", "install", "attackcti"])
         from sentence_transformers import SentenceTransformer, util
@@ -18,16 +19,23 @@ def install_and_import_packages():
 
 install_and_import_packages()
 
-# Initialize the model
+# Initialize the NLP model and MITRE ATT&CK client
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-
-# Initialize the MITRE ATT&CK client
 lift = attack_client()
 
 def find_similar_techniques(sentence):
-    sentence_embedding = model.encode(sentence, convert_to_tensor=True)
-    techniques = lift.get_techniques(stix_format=False)
-    
+    try:
+        sentence_embedding = model.encode(sentence, convert_to_tensor=True)
+    except Exception as e:
+        print(f"Error encoding sentence: {e}")
+        return []
+
+    try:
+        techniques = lift.get_techniques(stix_format=False)
+    except Exception as e:
+        print(f"Error fetching techniques from MITRE ATT&CK database: {e}")
+        return []
+
     technique_details = []
     for technique in techniques:
         technique_id = technique.get('technique_id', 'No ID')
@@ -49,23 +57,18 @@ def find_similar_techniques(sentence):
 
     return top_matches
 
-def write_matches_to_file(sentence, matches):
-    current_datetime = datetime.now().strftime('%Y-%m-%d_%H%M')
-    filename = f"{current_datetime}_techniquematch.txt"
-    with open(filename, 'w', encoding='utf-8') as file:
-        file.write(f"Input Sentence: {sentence}\n\nTop 3 Technique Matches:\n")
-        for match in matches:
-            file.write(f"ID: {match['id']}, Name: {match['name']}, Tactic: {match['tactic']}, Similarity: {match['similarity']:.4f}\n")
-    print(f"Results written to {filename}")
+def output_matches(sentence, matches):
+    print(f"Input Sentence: {sentence}\n\nTop 3 Technique Matches:")
+    for match in matches:
+        print(f"ID: {match['id']}, Name: {match['name']}, Tactic: {match['tactic']}, Similarity: {match['similarity']:.4f}")
 
 def main():
-    # Prompt the user for a sentence describing a cybersecurity attack
     sentence = input("Please enter a sentence describing a cybersecurity attack: ")
     matches = find_similar_techniques(sentence)
     if matches:
-        write_matches_to_file(sentence, matches)
+        output_matches(sentence, matches)
     else:
-        print("No matches found. Review technique processing and matching logic.")
+        print("No matches found. Please check the input sentence and try again.")
 
 if __name__ == "__main__":
     main()
