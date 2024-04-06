@@ -1,8 +1,12 @@
 import subprocess
 import sys
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext
+from queue import Queue, Empty
 
 def install_and_import_packages():
-    required_packages = ["sentence-transformers", "attackcti", "numpy"]
+    required_packages = ["sentence-transformers", "attackcti", "numpy", "pydantic"]
     try:
         # Check if the packages are already installed
         installed_packages = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze']).decode('utf-8').lower()
@@ -15,21 +19,16 @@ def install_and_import_packages():
         print(f"Failed to install required packages: {e}")
         sys.exit(1)
 
-    # After ensuring all packages are installed, import them globally
+    # Import the installed packages globally
     global SentenceTransformer, util, attack_client, np
     from sentence_transformers import SentenceTransformer, util
     from attackcti import attack_client
     import numpy as np
-    try:
-        global tk
-        import tkinter as tk
-        from tkinter import scrolledtext
-        from tkinter import messagebox
-    except ImportError as e:
-        sys.exit("tkinter is not available. This script requires a standard Python installation with tkinter.")
 
+# Attempt to import necessary packages, installing them if missing
 install_and_import_packages()
 
+# Initialize the NLP model and MITRE ATT&CK client outside the function to avoid re-initialization on each call
 model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
 lift = attack_client()
 
@@ -39,14 +38,14 @@ def find_similar_techniques(sentence, progress_callback, result_queue):
         progress_callback(20)
     except Exception as e:
         messagebox.showerror("Error", f"Error encoding sentence: {e}")
-        return
+        return []
 
     try:
         techniques = lift.get_techniques(stix_format=False)
         progress_callback(50)
     except Exception as e:
         messagebox.showerror("Error", f"Error fetching techniques from MITRE ATT&CK database: {e}")
-        return
+        return []
 
     technique_details = []
     for technique in techniques:
@@ -59,11 +58,10 @@ def find_similar_techniques(sentence, progress_callback, result_queue):
 
     descriptions_embeddings = model.encode([detail['description'] for detail in technique_details], convert_to_tensor=True)
     similarities = util.pytorch_cos_sim(sentence_embedding, descriptions_embeddings)
-    
+
     top_matches_indices = np.argsort(-similarities[0])[:3]
     top_matches = [{**technique_details[index], 'similarity': similarities[0][index].item()} for index in top_matches_indices]
 
-    # Format the result for each match on new lines
     result_text = "\n\n".join([f"ID: {match['id']}\nName: {match['name']}\nTactic: {match['tactic']}\nSimilarity: {match['similarity']:.4f}" for match in top_matches])
     result_queue.put(result_text)
     progress_callback(100)
