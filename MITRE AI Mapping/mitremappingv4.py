@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import requests
@@ -24,18 +25,30 @@ DATA_FILE_PATH = 'enterprise-attack.json'
 DATA_URL = 'https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json'
 
 def download_attack_data(url=DATA_URL, file_path=DATA_FILE_PATH):
-    if not os.path.exists(file_path):
-        print("Downloading MITRE ATT&CK Enterprise data...")
+    if os.path.exists(file_path):
+        last_modified_time = os.path.getmtime(file_path)
+        last_modified_date = datetime.date.fromtimestamp(last_modified_time)
+        current_date = datetime.date.today()
+        delta = current_date - last_modified_date
+
+        if delta.days <= 30:
+            print("The existing MITRE ATT&CK Enterprise data is up-to-date.")
+            return
+        else:
+            print("The existing MITRE ATT&CK Enterprise data is older than 30 days. Redownloading...")
+    else:
+        print("Downloading MITRE ATT&CK Enterprise data for the first time...")
+
+    try:
         response = requests.get(url)
         if response.status_code == 200:
             with open(file_path, 'wb') as file:
                 file.write(response.content)
             print("Download completed successfully.")
         else:
-            print("Failed to download the data.")
-            sys.exit(1)
-    else:
-        print("MITRE ATT&CK Enterprise data already exists.")
+            print("Failed to download the data. Status code:", response.status_code)
+    except requests.RequestException as e:
+        print("An error occurred while downloading the data:", e)
 
 def load_attack_data(file_path=DATA_FILE_PATH):
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -55,32 +68,24 @@ def find_similar_techniques(sentence, result_queue):
         for obj in data['objects'] if obj['type'] == 'attack-pattern' and 'external_references' in obj and 'description' in obj
     ]
 
-    # Ensure there are techniques to compare against
-    if not techniques:
-        result_text = "No techniques found in the dataset."
-        result_queue.put(result_text)
-        return
-
     sentence_embedding = model.encode(sentence, convert_to_tensor=True)
     descriptions_embeddings = model.encode([tech['description'] for tech in techniques], convert_to_tensor=True)
     similarities = util.pytorch_cos_sim(sentence_embedding, descriptions_embeddings)
 
-    # Make sure there are similarities to sort and select from
-    if similarities.size(1) < 3:
-        result_text = "Not enough data for similarity comparison."
-        result_queue.put(result_text)
-        return
-
     top_matches_indices = similarities.argsort(descending=True)[0][:3].tolist()
-
     top_matches = [techniques[idx] for idx in top_matches_indices]
+
     result_text = "\n\n".join([f"ID: {match['id']}\nName: {match['name']}\nDescription: {match['description']}" for match in top_matches])
     result_queue.put(result_text)
 
-
-def update_progress(value, progress_bar):
-    progress_bar['value'] = value
-    root.update_idletasks()
+def apply_dark_theme(root):
+    root.configure(bg='#333333')
+    style = ttk.Style(root)
+    style.theme_use('alt')
+    style.configure('TLabel', background='#333333', foreground='white')
+    style.configure('TButton', background='#555555', foreground='white', borderwidth=1)
+    style.map('TButton', background=[('active', '#666666')], foreground=[('active', 'white')])
+    style.configure('Horizontal.TProgressbar', background='#4f4f4f', troughcolor='#333333')
 
 def on_submit(entry_sentence, result_text, progress_bar, result_queue):
     sentence = entry_sentence.get("1.0", "end-1c")
@@ -105,20 +110,21 @@ if __name__ == "__main__":
 
     root = tk.Tk()
     root.title("AI MITRE ATT&CK Technique Correlation")
+    apply_dark_theme(root)
 
-    tk.Label(root, text="Enter a sentence describing a cybersecurity attack:").pack()
-    entry_sentence = scrolledtext.ScrolledText(root, height=5)
-    entry_sentence.pack()
+    tk.Label(root, text="Enter a sentence describing a cybersecurity attack:", fg="white", bg="#333333").pack()
+    entry_sentence = scrolledtext.ScrolledText(root, height=10, width=70, bg='#2b2b2b', fg='white', insertbackground='white')
+    entry_sentence.pack(padx=10, pady=5)
 
-    submit_button = tk.Button(root, text="Submit", command=lambda: on_submit(entry_sentence, result_text, progress_bar, result_queue))
-    submit_button.pack()
+    submit_button = ttk.Button(root, text="Submit", command=lambda: on_submit(entry_sentence, result_text, progress_bar, result_queue))
+    submit_button.pack(pady=5)
 
-    progress_bar = ttk.Progressbar(root, orient=tk.HORIZONTAL, length=400, mode='determinate')
-    progress_bar.pack()
+    progress_bar = ttk.Progressbar(root, orient=tk.HORIZONTAL, length=400, mode='determinate', style='Horizontal.TProgressbar')
+    progress_bar.pack(padx=10, pady=5)
 
-    tk.Label(root, text="Top 3 Technique Matches:").pack()
-    result_text = scrolledtext.ScrolledText(root, height=10)
-    result_text.pack()
+    tk.Label(root, text="Top 3 Technique Matches:", fg="white", bg="#333333").pack()
+    result_text = scrolledtext.ScrolledText(root, height=15, width=70, bg='#2b2b2b', fg='white', insertbackground='white')
+    result_text.pack(padx=10, pady=5)
 
     result_queue = Queue()
     root.after(100, lambda: check_queue(result_text, result_queue))
