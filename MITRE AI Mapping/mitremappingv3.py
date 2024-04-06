@@ -1,23 +1,32 @@
 import subprocess
 import sys
-import threading
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
-from queue import Queue, Empty
 
 def install_and_import_packages():
+    required_packages = ["sentence-transformers", "attackcti", "numpy"]
     try:
-        global SentenceTransformer, util, attack_client, np
-        from sentence_transformers import SentenceTransformer, util
-        from attackcti import attack_client
-        import numpy as np
-    except ImportError:
-        print("Required packages not found. Installing...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "sentence-transformers"])
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "attackcti"])
-        from sentence_transformers import SentenceTransformer, util
-        from attackcti import attack_client
-        import numpy as np
+        # Check if the packages are already installed
+        installed_packages = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze']).decode('utf-8').lower()
+        missing_packages = [pkg for pkg in required_packages if pkg.lower() not in installed_packages]
+        # Install any missing packages
+        for package in missing_packages:
+            print(f"{package} not found. Installing for user...")
+            subprocess.check_call([sys.executable, "-m", "pip", "install", package, "--user"])
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to install required packages: {e}")
+        sys.exit(1)
+
+    # After ensuring all packages are installed, import them globally
+    global SentenceTransformer, util, attack_client, np
+    from sentence_transformers import SentenceTransformer, util
+    from attackcti import attack_client
+    import numpy as np
+    try:
+        global tk
+        import tkinter as tk
+        from tkinter import scrolledtext
+        from tkinter import messagebox
+    except ImportError as e:
+        sys.exit("tkinter is not available. This script requires a standard Python installation with tkinter.")
 
 install_and_import_packages()
 
