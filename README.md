@@ -1,4 +1,5 @@
 # AI MITRE ATT&CK Technique Mapping GUI
+![GUI Screenshot](https://github.com/actualcyberbully/MITRE-Apps/assets/93664530/ab9a572f-b175-4fe7-908d-cacf75228c83)
 
 This repository contains a Python-based graphical user interface (GUI) application designed to map input sentences describing cybersecurity attacks to corresponding MITRE ATT&CK techniques. Utilizing the `sentence-transformers` library for semantic similarity and the official MITRE ATT&CK dataset, the application provides an intuitive way to find related techniques within the MITRE framework.
 
