@@ -25,6 +25,7 @@ This repository contains a Python-based graphical user interface (GUI) applicati
 After setting up the environment, you can run the main application using the following command:
 
 ```sh
+python setup_dependencies.py
 python aimitremapping_gui.py
 ```
 ## Upon launching, the application will:
