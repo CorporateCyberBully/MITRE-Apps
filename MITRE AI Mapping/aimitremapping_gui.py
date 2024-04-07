@@ -8,6 +8,17 @@ from queue import Queue, Empty
 import tkinter as tk
 from tkinter import ttk, scrolledtext, messagebox
 from sentence_transformers import SentenceTransformer, util
+try:
+    import win32gui
+    import win32con
+    def hide_console_window():
+        """Hides the console window in GUI mode."""
+        hwnd = win32gui.GetForegroundWindow()
+        win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
+except ImportError:
+    def hide_console_window():
+        """Fallback function if win32gui is not available."""
+        pass
 
 DATA_FILE_PATH = 'enterprise-attack.json'
 DATA_URL = 'https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json'
@@ -87,7 +98,7 @@ def on_submit(entry_sentence, result_text, please_wait_var, result_queue):
         return
 
     result_text.delete('1.0', tk.END)
-    please_wait_var.set("Please Wait...")  # Show the "Please Wait..." message
+    please_wait_var.set("Please Wait...")
     threading.Thread(target=lambda: find_similar_techniques(sentence, result_queue)).start()
 
 def check_queue(result_text, result_queue, please_wait_var):
@@ -95,12 +106,13 @@ def check_queue(result_text, result_queue, please_wait_var):
     try:
         result = result_queue.get_nowait()
         result_text.insert(tk.END, result)
-        please_wait_var.set("")  # Clear the "Please Wait..." message upon displaying the results
+        please_wait_var.set("")
     except Empty:
         pass
     root.after(100, lambda: check_queue(result_text, result_queue, please_wait_var))
 
 if __name__ == "__main__":
+    hide_console_window()
     download_attack_data()
 
     root = tk.Tk()
